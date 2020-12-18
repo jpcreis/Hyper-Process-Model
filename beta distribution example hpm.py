@@ -8,12 +8,14 @@ hyper_degree_l = [3,4,5,6]
 #n_components_l = [4]
 #hyper_degree_l = [4]
 
-# datapoints for each source model
+# datapoints for each source model to create the benchmark dataset
 num_dp = 20
 
 # datapoints to sample from trained source models that corresponds to number of points per shape
 num_dp_shape = 200
 
+# If HPM is true it means that the Hyper-Process Model (HPM) will be used, otherwise only the Hyper-Model (HM) is used
+# Please keep in mind that HM uses the coefficients of models instead of shapes, as used by HPM.
 HPM = True
 
 if HPM:
@@ -27,6 +29,8 @@ else:
 
 file.close()
 
+##########################################################################################
+# Preparing the benchmark dataset. This is not part of the HPM or HM algorithm
 # Alpha and Beta values for training
 a = [0.5, 1, 5, 10, 15]
 b = [0.5, 1, 5, 10, 15]
@@ -37,7 +41,7 @@ values_test = [4, 6, 8, 12]
 
 ###########################################################################################
 ###########################################################################################
-
+# combination of beta and alpha values 
 comb = []
 
 for i in range(len(a)):
@@ -56,8 +60,12 @@ print('shape: ', comb.shape[0])
 ##########################################################################
 ##########################################################################
 # In[2]:
+# Input values for the beta distribution are between 0 and 1
 
+# values for the benchmark dataset
 x = np.linspace(0.01, 0.99, num_dp)
+
+# values for datapoints in shapes
 x_disp = np.linspace(0.01, 0.99, num_dp_shape)
 
 '''
@@ -89,7 +97,6 @@ def coshyp(x, a, c, d):
 
 # Hyper-Process Modeling implementation
 if HPM:
-
     # Get all shapes ready for SSM
     shapes = []
 
