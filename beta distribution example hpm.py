@@ -95,7 +95,7 @@ def gaus(x, a, x0, sigma):
 def coshyp(x, a, c, d):
     return a * np.cosh(-c * x) + d
 
-# Hyper-Process Modeling implementation
+# Preparing the benchmark dataset for the HPM
 if HPM:
     # Get all shapes ready for SSM
     shapes = []
@@ -108,6 +108,8 @@ if HPM:
 
         y = beta.pdf(x, comb[i, 0], comb[i, 1])
 
+        # these set of conditions allow to train a specific method for the type of curves produced by the beta distribution
+        # Using different types of methods for hyper-modeling is not possible in "regular" HM
         if ((comb[i, 0] == 0.5) and (comb[i, 1] == 0.5)):
             degree = 7
             print('Polynomial Function degree', degree)
@@ -142,8 +144,9 @@ if HPM:
         # Calculate error
         res = mean_squared_error(regr(x_disp), beta.pdf(x_disp, comb[i, 0], comb[i, 1]))
         print('Error:', res)
-
-        # Sample 100 datapoints from the trained source models
+        
+        ###########################################################################
+        # Sample 100 datapoints from the trained source models - Produce the shapes 
         if len(shapes) == 0:
             shapes = np.matrix(regr(x_disp))
             # shapes = np.matrix(beta.pdf(x_disp, comb[i,0], comb[i,1]))
