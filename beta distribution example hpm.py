@@ -23,7 +23,10 @@ class HyperProcessModel:
 
     # HPM
     def decomposition(self):
-
+        """
+        Performs the decomposition of all shapes using eigenvectors
+        :return: all eigenvalues, all eigenvectors
+        """
         print('Start Decomposing...')
         models = self.shapes.transpose()
 
@@ -35,6 +38,17 @@ class HyperProcessModel:
         return eigenvalues.real, eigenvectors.real
     # gives preference to the max_variance
     def get_suitable_eigen(self, eigenvals, n_components = None, max_variance = 0.95):
+        """
+        Select the most suitable eigenvectors to use in the SSM. In this particular case,
+        when both number of components and maximum variance are specified, preference is
+        given to variance. Iterating through all eigenvectors, if it first reaches the
+        target variance, it returns the corresponding eigenvectors, if not, if it reaches
+        the number of components, it return the corresponding eigenvectors.
+        :param eigenvals: array with all eigenvalurs
+        :param n_components: int, default=None - number of components to be included
+        :param max_variance: float, default=0.95 - variance to be reached
+        :return: int - number of suitable components
+        """
 
         sum_eigenvals = sum(eigenvals)
         variance = eigenvals / sum_eigenvals
@@ -55,20 +69,49 @@ class HyperProcessModel:
 
         return len(eigenvals)
 
-    def get_b_param(self, mean, model, evec):
-        sub = (model - mean)
+    def get_b_param(self, mean, shape, evec):
+        """
+        According to SSM, the b parameters are the deformable parameters that allow to reproduce
+        back the original shape using the decomposed shapes (eigenvectors) and mean shape
+        :param mean: array (nsamples*nfeatures) - array with all values for mean shape.
+        :param shape: array (nsamples*nfeatures) - shape used to calculate b parameters from SSM
+        :param evec: ndarray - eigenvectors to be used for the b paramters transformation
+        :return: array - b paramters / deformable parameters for the corresponding shape
+        """
+        sub = (shape - mean)
         return np.dot(np.transpose(evec), np.transpose(sub))
 
     def get_in_shape(self):
+        """
+        Return the input used to generate shapes for all process models
+        :return: ndarray - (nsamples, nfeatures)
+        """
         return self.in_shape
 
     def generate_shape(self, b):
+        """
+        Based on a deformable parameter (b), generates the corresponding shape
+        :param b: array - set of deformable parameters
+        :return: array (nsamples*nfeatures) - generated shape that needs to be reshaped as (nsamples, nfeatures)
+        """
         return self.mean_shape + np.transpose(np.dot(self.eigenvectors, b))
 
     def set_pol_degree(self, degree):
+        """
+        Set the polynomial degree for the hyper model
+        :param degree: int
+        :return: None
+        """
         self.degree = degree
 
     def full_factorial_design(self, level, min, max):
+        """
+        Creates a combination of values, bounded to a minimum and maximum, for a "level" number of combinations
+        :param level: int - number of combinations to be produced
+        :param min: array (nfeatures) - minimum value for all features
+        :param max: array (nfeatures) - maximum value for all features
+        :return: ndarray - all combinations
+        """
 
         if level < 2:
             print('Level provided is less than 2')
@@ -90,6 +133,11 @@ class HyperProcessModel:
         return self.in_shape
 
     def add_shape(self, shape):
+        """
+        Adds a shape to be used in the SSM. Conditions should be added in the same order as shapes
+        :param shape: array (nsamples*nfeatures) - shape to be added
+        :return: None
+        """
         # Sample 100 datapoints from the trained source models - Produce the shapes
         if len(self.shapes) == 0:
             self.shapes = np.matrix(shape)
@@ -97,6 +145,11 @@ class HyperProcessModel:
             self.shapes = np.vstack((self.shapes, shape))
 
     def add_condition(self, cond):
+        """
+        Adds a certain condition to be used by the hyper model. Shapes should be added in the same order as conditions
+        :param cond: array - conditions
+        :return: None
+        """
         # Sample 100 datapoints from the trained source models - Produce the shapes
         if len(self.conditions) == 0:
             self.conditions = np.matrix(cond)
@@ -104,10 +157,22 @@ class HyperProcessModel:
             self.conditions = np.vstack((self.conditions, cond))
 
     def get_mean_shape(self):
+        """
+        Calculates and returns the mean shape based on all previously added shapes.
+        :return: array (nsamples*nfeatures) - Mean shape for SSM
+        """
         self.mean_shape = np.mean(self.shapes, axis=0)
         return self.mean_shape
 
     def get_eigen(self, n_components, max_variance):
+        """
+        Calculates all eigevectors and eigenvalues and returns only the most suitable ones. Meanwhile, all deformable
+        parameters are calculated for all available shapes. This is a combination of previously existing functions to
+        automate the calculation process.
+        :param n_components: int - number of components
+        :param max_variance: float - variance to be reaches
+        :return: eigenvalues (array), eigenvectors (ndarray)
+        """
         # eigenvectors
         self.eigenvalues, self.eigenvectors = self.decomposition()
 
@@ -120,7 +185,6 @@ class HyperProcessModel:
 
         ##########################################
         # Calculate B params
-
         for i in range(len(self.shapes)):
             if len(self.b_params) == 0:
                 self.b_params = np.matrix(self.get_b_param(self.mean_shape, self.shapes[i], self.eigenvectors)).transpose()
@@ -131,7 +195,18 @@ class HyperProcessModel:
         return self.eigenvalues, self.eigenvectors
 
     def train_hyper_model(self, n_components = None, max_variance = 0.95):
-
+        """
+        Train the hyper model. The normal and most interesting scenario is when the number of conditions (c) is
+        higher than the number of deformable parameters (b), so the hyper model can be trained as such h: c -> b.
+        However, it might be case that b is higher than c, so, ideally the model would be trained
+        as such h: b -> c. In this case, either 1) the inverse of h needs to be calculated or 2) an optimization
+        problem needs to be formulated to estimate b based on a target c. To ease this latter case,
+        a MultiOutputRegressor is used for hyper model, meaning that a model per target is trained, so the case
+        of b being higher than c is no longer a problem.
+        :param n_components: int - number of components
+        :param max_variance: float - variance
+        :return: float - score (R^2) of the trained model (do not mistake with error)
+        """
         self.get_mean_shape()
         self.get_eigen(n_components, max_variance)
 
@@ -150,58 +225,22 @@ class HyperProcessModel:
         self.hyper_model.fit(self.conditions, self.b_params)
         score = self.hyper_model.score(self.conditions, self.b_params)
 
-        '''
-        if self.conditions.shape[1] >= self.b_params.shape[1]:
-            self.hyper_model.fit(self.conditions, self.b_params)
-            score = self.hyper_model.score(self.conditions, self.b_params)
-        else:
-            self.optimization = True
-            self.hyper_model.fit(self.b_params, self.conditions)
-            score = self.hyper_model.score(self.b_params, self.conditions)
-            print("entrei opt")
-            print("score",score)
-            input()
-        '''
-
         return score
 
     def predict(self, new_cond):
-
-        if not self.optimization:
-            return self.hyper_model.predict(new_cond)
-        else:
-            # find initial guess
-            mini = 9999
-            x0 = self.b_params[0]
-            temp = self.conditions[0]
-            for i in range(self.conditions.shape[0]):
-                sub = np.linalg.norm(new_cond - self.conditions[i])
-                if sub < mini:
-                    mini = sub
-                    x0 = self.b_params[i]
-                    temp = self.conditions[i]
-
-            print("target",new_cond)
-            print("closest",temp)
-            input()
-
-            # Optimization
-            res = minimize(self.mse_calc, x0, method='nelder-mead',options={'xatol': 1e-15, 'disp': True, 'fatol': 1e-15}, args=(new_cond, ))
-
-            print("result",self.hyper_model.predict(np.matrix(res.x)))
-            print("target",new_cond)
-            input()
-
-            return res.x
-
-        return None
-
-    def mse_calc(self, values, target):
-
-        return mean_squared_error(self.hyper_model.predict(np.matrix(values)), target)
+        """
+        Makes a prediction of the deformable parameters to be used in the SSM based on the new conditions provided.
+        :param new_cond: array - new conditions
+        :return: array - deformable parameters
+        """
+        return self.hyper_model.predict(new_cond)
 
     def get_new_shape(self, new_cond):
-
+        """
+        Based on the new conditions, returns the generated shape to be used for further training.
+        :param new_cond: array - new conditions
+        :return: array (nsamples*nfeatures) - new generated shape
+        """
         result_def = self.predict(new_cond)[0]
 
         new_gen_shape = self.generate_shape(result_def)
@@ -210,6 +249,12 @@ class HyperProcessModel:
         return new_gen_shape
 
     def set_hyper_model(self, model):
+        """
+        This function should be used if a new method needs to be used for the hyper model instead of the
+        default polynomial.
+        :param model: Predictor
+        :return: None
+        """
         self.hyper_model = model
 
 def func(x, a, c, d):
